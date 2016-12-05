@@ -27,18 +27,23 @@ The key elements that make this algorithm work are:
 (3) Reasonable proposed distribution to generate candidate samples. Usually go with a Gaussian
     that is centered on the current x value with some fixed standard deviation, sigma.
 
+Rev 2:
+ - Added burn in feature
+ - Added plot functionality
+ - Functionalized MH-Sampler
 
 Notes:
 
-Add burn in and lag parameters for next rev.
-Functionalize algorithm
+TODO: Add lag parameters for next rev.
+
 '''
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 # ----  Inputs ----- #
 
-numSamples = 1000
+numSamples = 2000
 
 # Standard deviation for Gaussian (proposed distribution)
 sigma = 0.5
@@ -46,14 +51,10 @@ sigma = 0.5
 # --- End Inputs --- #
 
 # Initialize parameters
-x = np.zeros(numSamples)
-
-xstar = np.zeros(numSamples)
-
-accept = 0
-
-# Initial value of x
-x[0] = -1
+x = 0
+acceptSample = 0
+burnIn = 200
+xfinal = np.zeros(numSamples)
 
 def targetDistribution(z):
     '''
@@ -69,28 +70,58 @@ def targetDistribution(z):
 
 
 # -------- Metropolis-Hastings Algorithm -------- #
-for i in range(numSamples - 1):
+def getMetropolisSample(x, sigma):
+
+    # Default accept sample flag to false
+    accept = False
 
     # Sample from normal distribution
-    xstar[i] = np.random.normal(x[i], sigma)
+    xstar = np.random.normal(x, sigma)
 
     # Compute the Acceptance probability
-    pA = targetDistribution(xstar[i]) / targetDistribution(x[i])
+    pA = targetDistribution(xstar) / targetDistribution(x)
 
-    qA = np.abs(np.random.normal(xstar[i], sigma)) / np.abs(np.random.normal(x[i], sigma))
+    qA = np.abs(np.random.normal(xstar, sigma)) / np.abs(np.random.normal(x, sigma))
 
     # Acceptance check
     if np.abs(np.random.uniform()) < np.min([1, pA * qA]):
 
-        x[i + 1] = xstar[i]
+        x = xstar
 
-        accept += 1  # Keep counts of accepted values
+        accept = True  # Keep counts of accepted values
 
-    else:  # Retain previous value for next iteration
+    return x, accept
 
-        x[i + 1] = x[i]
+# -------- Execution -------- #
+# Let algorithm burn samples first then proceed with
+# nominal sampling
+
+# Burn In
+for i in range(burnIn):
+    x, accept = getMetropolisSample(x, sigma)
+
+xfinal[0] = x
+
+# MCMC Sample
+for k in range(numSamples-1):
+    xfinal[k+1], accept = getMetropolisSample(xfinal[k], sigma)
+    if accept:
+        acceptSample += 1
 
 # -------- End Metropolis-Hastings Algorithm -------- #
 
-print("Acceptance Rate: ", 100 * accept / numSamples)
+print "Acceptance Rate: ", 100 * acceptSample / numSamples, "%"
 
+# --- Plots --- #
+iteration = np.arange(1, numSamples+1, 1)
+plt.figure(1)
+plt.subplot(211)
+plt.hist(xfinal, 50)
+plt.ylabel("Sample Frequency")
+plt.xlabel("Bin")
+
+plt.subplot(212)
+plt.plot(xfinal, iteration)
+plt.ylabel("Iteration")
+plt.xlabel("Sample Value")
+plt.show()
